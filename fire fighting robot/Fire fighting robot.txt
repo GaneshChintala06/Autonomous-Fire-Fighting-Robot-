@@ -1,0 +1,204 @@
+// Compatible with ESP32 Arduino Core 3.x
+// No external libraries needed
+
+// Motor Driver L298N Pins
+#define enA 2   // Enable A (PWM)
+#define in1 14  // Motor 1 Input 1
+#define in2 15  // Motor 1 Input 2
+#define in3 13  // Motor 2 Input 3
+#define in4 12  // Motor 2 Input 4
+#define enB 4   // Enable B (PWM)
+
+// Flame Sensor Pins (Digital)
+#define ir_R 16  // Right flame sensor (U0RXD)
+#define ir_F 0   // Front flame sensor (can be used after programming)
+#define ir_L 3   // Left flame sensor (U0TXD)
+
+// Servo and Pump Pins
+#define SERVO_PIN 1    // Servo motor control
+#define PUMP_PIN 33    // Relay for water pump
+
+// PWM Configuration for Motors
+const int freq = 5000;
+const int resolution = 8;
+
+// PWM Configuration for Servo
+const int servoFreq = 50; // 50Hz for servo
+const int servoResolution = 16; // 16-bit resolution for better control
+
+int Speed = 160; // Motor speed (0-255)
+int s1, s2, s3;  // Sensor readings
+
+// Function declarations
+void Stop();
+void forward();
+void backward();
+void turnRight();
+void turnLeft();
+void servoWrite(int angle);
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Configure PWM for motor speed control (ESP32 Core 3.x)
+  ledcAttach(enA, freq, resolution);
+  ledcAttach(enB, freq, resolution);
+  
+  // Configure motor control pins
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+  
+  // Configure sensor pins (Digital flame sensors)
+  pinMode(ir_R, INPUT);
+  pinMode(ir_F, INPUT);
+  pinMode(ir_L, INPUT);
+  
+  // Configure pump relay pin
+  pinMode(PUMP_PIN, OUTPUT);
+  digitalWrite(PUMP_PIN, LOW);
+  
+  // Setup servo PWM (ESP32 Core 3.x)
+  ledcAttach(SERVO_PIN, servoFreq, servoResolution);
+  
+  // Initial servo sweep
+  for (int angle = 90; angle <= 140; angle += 5) {
+    servoWrite(angle);
+    delay(50);
+  }
+  for (int angle = 140; angle >= 40; angle -= 5) {
+    servoWrite(angle);
+    delay(50);
+  }
+  for (int angle = 40; angle <= 95; angle += 5) {
+    servoWrite(angle);
+    delay(50);
+  }
+  
+  // Set motor speed
+  ledcWrite(enA, Speed);
+  ledcWrite(enB, Speed);
+  
+  delay(500);
+}
+
+void loop() {
+  // Read flame sensors (Digital: LOW = fire detected, HIGH = no fire)
+  s1 = digitalRead(ir_R);
+  s2 = digitalRead(ir_F);
+  s3 = digitalRead(ir_L);
+  
+  // Print sensor values for debugging (0 = fire detected, 1 = no fire)
+  Serial.print("Right: ");
+  Serial.print(s1);
+  Serial.print("\t Front: ");
+  Serial.print(s2);
+  Serial.print("\t Left: ");
+  Serial.println(s3);
+  
+  delay(50);
+  
+  // Fire detection and response (Digital sensors: LOW = fire detected)
+  if (s1 == LOW) {  // Right sensor detects fire
+    Stop();
+    digitalWrite(PUMP_PIN, HIGH);  // Turn on pump
+    
+    // Sweep servo right
+    for (int angle = 90; angle >= 40; angle -= 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+    for (int angle = 40; angle <= 90; angle += 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+  } 
+  else if (s2 == LOW) {  // Front sensor detects fire
+    Stop();
+    digitalWrite(PUMP_PIN, HIGH);  // Turn on pump
+    
+    // Full servo sweep
+    for (int angle = 90; angle <= 140; angle += 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+    for (int angle = 140; angle >= 40; angle -= 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+    for (int angle = 40; angle <= 90; angle += 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+  } 
+  else if (s3 == LOW) {  // Left sensor detects fire
+    Stop();
+    digitalWrite(PUMP_PIN, HIGH);  // Turn on pump
+    
+    // Sweep servo left
+    for (int angle = 90; angle <= 140; angle += 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+    for (int angle = 140; angle >= 90; angle -= 3) {
+      servoWrite(angle);
+      delay(30);
+    }
+  }
+  else {  // No fire detected - normal navigation mode
+    digitalWrite(PUMP_PIN, LOW);  // Turn off pump
+    Stop();
+    // You can add obstacle avoidance or search pattern here
+  }
+  
+  delay(10);
+}
+
+// Function to control servo using ESP32 LEDC PWM
+void servoWrite(int angle) {
+  // Convert angle (0-180) to duty cycle
+  // Servo pulse width: 500-2500 microseconds
+  // For 50Hz (20ms period) with 16-bit resolution (65535 max)
+  // 500us = 1638, 2500us = 8192
+  int minDuty = 1638;  // 500us pulse width
+  int maxDuty = 8192;  // 2500us pulse width
+  
+  int duty = map(angle, 0, 180, minDuty, maxDuty);
+  ledcWrite(SERVO_PIN, duty);
+}
+
+void forward() {
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void backward() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void turnRight() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void turnLeft() {
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void Stop() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
